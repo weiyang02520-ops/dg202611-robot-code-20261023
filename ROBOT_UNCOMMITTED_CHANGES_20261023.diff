@@ -1,0 +1,675 @@
+diff --git a/src/ylhb_base/config/base_kinematics.yaml b/src/ylhb_base/config/base_kinematics.yaml
+index 58119c8..1fa643e 100644
+--- a/src/ylhb_base/config/base_kinematics.yaml
++++ b/src/ylhb_base/config/base_kinematics.yaml
+@@ -1,40 +1,40 @@
+-zlac8015d_canopen_controller:
+-  ros__parameters:
+-    # 车轮半径，单位：米。影响速度换算和里程计距离；实测轮直径后填“直径 / 2”。
+-    wheel_radius: 0.0865
+-    # 左右驱动轮接地点中心之间的距离，单位：米。影响原地旋转角速度和里程计转角。
+-    wheel_track: 0.4008
+-    # 底盘最大线速度，单位：米/秒。cmd_vel 超过该值会被限幅，调大前确认电机和场地安全。
+-    max_linear_speed: 0.35
+-    # 当前实车最佳转弯基线的底盘余量；cmd_vel 超过该值会被限幅。
+-    max_angular_speed: 0.70
+-    # 驱动器低 16 位通道连接左轮，高 16 位通道连接右轮。
+-    low_channel_is_left: true
+-    # 当前实车前进方向与 ROS base_link 一致；角速度方向保持不变。
+-    linear_axis_direction: 1.0
+-    # 通道极性：逻辑轮正向转速转换为驱动器通道命令时的方向系数，只允许 1.0 或 -1.0。
+-    low_channel_direction: 1.0
+-    # 通道极性：逻辑轮正向转速转换为驱动器通道命令时的方向系数，只允许 1.0 或 -1.0。
+-    high_channel_direction: -1.0
+-    # 里程计父坐标系，通常保持 odom。
+-    odom_frame: odom
+-    # 底盘坐标系，当前系统使用 base_footprint 作为平面运动基座。
+-    base_frame: base_footprint
+-    # 是否由底盘控制器直接发布 odom -> base_frame 的 TF。bringup 中由 EKF 发布，通常保持 false。
+-    publish_tf: false
+-
+-# ---------------------------------------------------------------------------
+-# STM32 serial fallback backend, active only with base_backend:=stm32.
+-# ROS 2 matches a parameter file by NODE NAME, so this second top-level key is
+-# required: the zlac8015d_canopen_controller block above does not reach this node.
+-# Only wheel_track is listed. base_controller declares no wheel_radius and needs
+-# none, because it transmits wheel linear velocity as mm/s int16 and the STM32
+-# firmware owns the radius conversion. Do not pad this block with parameters the
+-# node does not consume.
+-# Keep wheel_track numerically identical to the zlac block above; the config
+-# consistency test in test/test_base_kinematics_config_chain.py asserts that.
+-# ---------------------------------------------------------------------------
+-base_controller:
+-  ros__parameters:
+-    # 左右驱动轮接地点中心之间的距离，单位：米。与上方 zlac 后端保持一致。
+-    wheel_track: 0.4008
++zlac8015d_canopen_controller:
++  ros__parameters:
++    # 车轮半径，单位：米。影响速度换算和里程计距离；实测轮直径后填“直径 / 2”。
++    wheel_radius: 0.0865
++    # 左右驱动轮接地点中心之间的距离，单位：米。影响原地旋转角速度和里程计转角。
++    wheel_track: 0.4008
++    # 底盘最大线速度，单位：米/秒。cmd_vel 超过该值会被限幅，调大前确认电机和场地安全。
++    max_linear_speed: 0.35
++    # 当前实车最佳转弯基线的底盘余量；cmd_vel 超过该值会被限幅。
++    max_angular_speed: 0.70
++    # 驱动器低 16 位通道连接左轮，高 16 位通道连接右轮。
++    low_channel_is_left: true
++    # 实车电机前后方向与 ROS base_link 相反：只反转线速度命令和反馈，角速度方向保持不变。
++    linear_axis_direction: -1.0
++    # 通道极性：逻辑轮正向转速转换为驱动器通道命令时的方向系数，只允许 1.0 或 -1.0。
++    low_channel_direction: 1.0
++    # 通道极性：逻辑轮正向转速转换为驱动器通道命令时的方向系数，只允许 1.0 或 -1.0。
++    high_channel_direction: -1.0
++    # 里程计父坐标系，通常保持 odom。
++    odom_frame: odom
++    # 底盘坐标系，当前系统使用 base_footprint 作为平面运动基座。
++    base_frame: base_footprint
++    # 是否由底盘控制器直接发布 odom -> base_frame 的 TF。bringup 中由 EKF 发布，通常保持 false。
++    publish_tf: false
++
++# ---------------------------------------------------------------------------
++# STM32 serial fallback backend, active only with base_backend:=stm32.
++# ROS 2 matches a parameter file by NODE NAME, so this second top-level key is
++# required: the zlac8015d_canopen_controller block above does not reach this node.
++# Only wheel_track is listed. base_controller declares no wheel_radius and needs
++# none, because it transmits wheel linear velocity as mm/s int16 and the STM32
++# firmware owns the radius conversion. Do not pad this block with parameters the
++# node does not consume.
++# Keep wheel_track numerically identical to the zlac block above; the config
++# consistency test in test/test_base_kinematics_config_chain.py asserts that.
++# ---------------------------------------------------------------------------
++base_controller:
++  ros__parameters:
++    # 左右驱动轮接地点中心之间的距离，单位：米。与上方 zlac 后端保持一致。
++    wheel_track: 0.4008
+diff --git a/src/ylhb_base/test/test_zlac_drive_mapping.cpp b/src/ylhb_base/test/test_zlac_drive_mapping.cpp
+index 71e1d87..fbcca40 100644
+--- a/src/ylhb_base/test/test_zlac_drive_mapping.cpp
++++ b/src/ylhb_base/test/test_zlac_drive_mapping.cpp
+@@ -118,7 +118,7 @@ TEST(ZlacChannelMappingTest, BaseKinematicsConfigUsesCalibratedFieldMapping)
+     (std::istreambuf_iterator<char>(config_stream)), std::istreambuf_iterator<char>());
+ 
+   EXPECT_NE(config.find("low_channel_is_left: true"), std::string::npos);
+-  EXPECT_NE(config.find("linear_axis_direction: 1.0"), std::string::npos);
++  EXPECT_NE(config.find("linear_axis_direction: -1.0"), std::string::npos);
+   EXPECT_NE(config.find("low_channel_direction: 1.0"), std::string::npos);
+   EXPECT_NE(config.find("high_channel_direction: -1.0"), std::string::npos);
+ }
+diff --git a/src/ylhb_llm/qml/Main.qml b/src/ylhb_llm/qml/Main.qml
+index 6a5013d..39e9e90 100644
+--- a/src/ylhb_llm/qml/Main.qml
++++ b/src/ylhb_llm/qml/Main.qml
+@@ -32,7 +32,8 @@ ApplicationWindow {
+         "pages/Mapping3DPage.qml",
+         "pages/StatusPage.qml",
+         "pages/VoiceAiPage.qml",
+-        "pages/LogsPage.qml"
++        "pages/LogsPage.qml",
++        "pages/CameraPage.qml"
+     ]
+ 
+     onClosing: function(close) {
+@@ -113,34 +114,51 @@ ApplicationWindow {
+                         }
+                     }
+ 
+-                    Repeater {
+-                        model: ["连接与服务", "巡检任务", "三维建模", "本机状态", "AI 助手", "日志"]
+-                        delegate: Button {
+-                            required property int index
+-                            required property string modelData
+-                            objectName: "navigationButton" + index
+-                            Layout.fillWidth: true
+-                            Layout.preferredHeight: Theme.minimumTouchHeight
+-                            text: modelData
+-                            flat: true
+-                            font.pixelSize: 15
+-                            background: Rectangle {
+-                                radius: Theme.cardRadius
+-                                color: window.currentPage === index ? Theme.primarySoft : "transparent"
+-                            }
+-                            contentItem: Text {
+-                                text: parent.text
+-                                color: window.currentPage === index ? Theme.primary : Theme.text
+-                                font: parent.font
+-                                verticalAlignment: Text.AlignVCenter
+-                                leftPadding: 12
++                    Flickable {
++                        id: navigationList
++                        objectName: "navigationList"
++                        Layout.fillWidth: true
++                        Layout.fillHeight: true
++                        clip: true
++                        contentWidth: width
++                        contentHeight: navigationColumn.implicitHeight
++                        boundsBehavior: Flickable.StopAtBounds
++                        interactive: contentHeight > height
++                        ScrollIndicator.vertical: ScrollIndicator {}
++
++                        Column {
++                            id: navigationColumn
++                            width: navigationList.width
++                            spacing: 8
++
++                            Repeater {
++                                model: ["连接与服务", "巡检任务", "三维建模", "本机状态", "AI 助手", "日志", "相机画面"]
++                                delegate: Button {
++                                    required property int index
++                                    required property string modelData
++                                    objectName: "navigationButton" + index
++                                    width: navigationColumn.width
++                                    height: Theme.minimumTouchHeight
++                                    text: modelData
++                                    flat: true
++                                    font.pixelSize: 15
++                                    background: Rectangle {
++                                        radius: Theme.cardRadius
++                                        color: window.currentPage === index ? Theme.primarySoft : "transparent"
++                                    }
++                                    contentItem: Text {
++                                        text: parent.text
++                                        color: window.currentPage === index ? Theme.primary : Theme.text
++                                        font: parent.font
++                                        verticalAlignment: Text.AlignVCenter
++                                        leftPadding: 12
++                                    }
++                                    onClicked: window.currentPage = index
++                                }
+                             }
+-                            onClicked: window.currentPage = index
+                         }
+                     }
+ 
+-                    Item { Layout.fillHeight: true }
+-
+                     Button {
+                         objectName: "closeConsoleButton"
+                         Layout.fillWidth: true
+diff --git a/src/ylhb_llm/test/test_qml_navigation.py b/src/ylhb_llm/test/test_qml_navigation.py
+index e583a54..5e3f426 100644
+--- a/src/ylhb_llm/test/test_qml_navigation.py
++++ b/src/ylhb_llm/test/test_qml_navigation.py
+@@ -21,6 +21,63 @@ def test_main_navigation_uses_patrol_and_voice_pages_not_control_or_mapping():
+     assert "MappingPage.qml" not in qml
+ 
+ 
++def test_main_navigation_appends_camera_page_last():
++    qml = Path("src/ylhb_llm/qml/Main.qml").read_text(encoding="utf-8")
++
++    assert "property int currentPage: 1" in qml
++    assert '"AI 助手", "日志", "相机画面"]' in qml
++    sources = qml.split("property var pageSources: [", 1)[1].split("]", 1)[0]
++    pages = [item.strip().strip('",') for item in sources.split(",") if item.strip()]
++    assert pages == [
++        "pages/BridgePage.qml",
++        "pages/PatrolPage.qml",
++        "pages/Mapping3DPage.qml",
++        "pages/StatusPage.qml",
++        "pages/VoiceAiPage.qml",
++        "pages/LogsPage.qml",
++        "pages/CameraPage.qml",
++    ]
++    assert Path("src/ylhb_llm/qml/pages/CameraPage.qml").is_file()
++    assert 'objectName: "navigationList"' in qml
++
++
++def test_camera_page_uses_backend_slots_and_image_provider():
++    qml = Path("src/ylhb_llm/qml/pages/CameraPage.qml").read_text(encoding="utf-8")
++    node = Path("src/ylhb_llm/ylhb_llm/inspection_display_ui_node.py").read_text(encoding="utf-8")
++    bridge = Path("src/ylhb_llm/ylhb_llm/ui_ros_bridge.py").read_text(encoding="utf-8")
++
++    assert '"相机画面"' in qml
++    assert "Component.onCompleted: backend.setCameraPreviewActive(true)" in qml
++    assert "Component.onDestruction: backend.setCameraPreviewActive(false)" in qml
++    assert "backend.startCamera()" in qml
++    assert "backend.stopCamera()" in qml
++    assert '"image://camera/frame/" + backend.cameraFrameCounter' in qml
++    assert "cache: false" in qml
++    assert "fillMode: Image.PreserveAspectFit" in qml
++    assert 'backend.localizedStatus(backend.systemStatus.zed || "stopped")' in qml
++    assert "backend.cameraStreamText" in qml
++    assert "仅在本页打开时订阅画面，约 5 帧/秒；切到其他页面即停止订阅" in qml
++    assert "sendSystemCommand" not in qml
++
++    stop_button = qml.split('objectName: "stopCameraButton"', 1)[1].split("}", 1)[0]
++    assert "onClicked: stopCameraDialog.open()" in stop_button
++    assert "backend.stopCamera()" not in stop_button
++    dialog = qml.split("id: stopCameraDialog", 1)[1]
++    assert "Dialog {\n        id: stopCameraDialog" in qml
++    assert "backend.stopCamera()" in dialog
++    assert "取消" in dialog
++
++    assert "engine.addImageProvider('camera', camera_image_provider)" in node
++    assert node.index("engine.addImageProvider('camera'") < node.index("engine.load(")
++    assert "signals.cameraFrame.connect(backend.update_camera_frame)" in node
++    assert "cameraFrame = pyqtSignal(object)" in bridge
++    assert "'camera_preview_topic': '/zed/zed_node/rgb/color/rect/image'" in bridge
++    assert "'camera_preview_max_hz': 5.0" in bridge
++    assert "qos_profile_sensor_data" in bridge
++    assert "self.destroy_subscription(subscription)" in bridge
++    assert "create_publisher(Image" not in bridge
++
++
+ def test_status_page_shows_3d_mapping_process_card():
+     qml = Path("src/ylhb_llm/qml/pages/StatusPage.qml").read_text(encoding="utf-8")
+ 
+diff --git a/src/ylhb_llm/test/test_ui_backend.py b/src/ylhb_llm/test/test_ui_backend.py
+index a1c1dc1..a5230e3 100644
+--- a/src/ylhb_llm/test/test_ui_backend.py
++++ b/src/ylhb_llm/test/test_ui_backend.py
+@@ -29,6 +29,10 @@ class FakeBridge:
+         self.cloud_enabled_requests = []
+         self.local_app_enabled_requests = []
+         self.platform_start_confirm_requests = 0
++        self.camera_preview_requests = []
++
++    def set_camera_preview_active(self, active):
++        self.camera_preview_requests.append(bool(active))
+ 
+     def publish_system_command(self, command, **extra):
+         self.system_commands.append((command, extra))
+@@ -594,6 +598,93 @@ def test_mapping3d_slots_publish_supervisor_commands():
+     ]
+ 
+ 
++def test_camera_slots_publish_zed_commands_and_are_debounced():
++    now = [100.0]
++    backend = make_backend(lambda: now[0])
++
++    backend.startCamera()
++    backend.startCamera()
++    backend.stopCamera()
++    backend.stopCamera()
++    now[0] = 106.0
++    backend.stopCamera()
++
++    assert backend.bridge.system_commands == [
++        ('start_zed', {}),
++        ('stop_zed', {}),
++        ('stop_zed', {}),
++    ]
++    messages = [item.get('message', '') for item in backend.logs]
++    assert '系统命令: start_zed' in messages
++    assert '系统命令: stop_zed' in messages
++    assert '忽略重复系统命令: start_zed' in messages
++
++
++class FakeCameraProvider:
++    def __init__(self):
++        self.frames = []
++        self.clears = 0
++
++    def set_frame(self, image):
++        self.frames.append(image)
++
++    def clear(self):
++        self.clears += 1
++
++
++def test_camera_preview_activation_frames_and_stream_text():
++    now = [100.0]
++    provider = FakeCameraProvider()
++    backend = make_backend(lambda: now[0], camera_image_provider=provider)
++    frame = object()
++
++    backend.update_camera_frame(frame)
++    assert provider.frames == [] and backend.cameraFrameCounter == 0
++    assert backend.cameraStreamText == '相机未开启'
++
++    backend.setCameraPreviewActive(True)
++    backend.setCameraPreviewActive(True)
++    assert backend.bridge.camera_preview_requests == [True]
++    assert backend.cameraPreviewActive is True
++    assert provider.clears == 1
++
++    backend.update_system_status({'zed': 'running'})
++    assert backend.cameraStreamState == 'waiting'
++    assert backend.cameraStreamText == '等待画面…'
++
++    backend.update_camera_frame(frame)
++    backend.update_camera_frame(frame)
++    assert provider.frames == [frame, frame]
++    assert backend.cameraFrameCounter == 2
++    assert backend.cameraStreamText == '画面正常'
++
++    now[0] = 103.0
++    assert backend.cameraStreamText == '等待画面…'
++    backend.update_system_status({'zed': 'stopped'})
++    assert backend.cameraStreamText == '相机未开启'
++
++    backend.setCameraPreviewActive(False)
++    backend.update_camera_frame(frame)
++    assert backend.bridge.camera_preview_requests == [True, False]
++    assert backend.cameraPreviewActive is False
++    assert provider.frames == [frame, frame]
++
++    backend.setCameraPreviewActive(True)
++    assert backend.cameraFrameCounter == 0
++    assert provider.clears == 2
++
++
++def test_backend_shutdown_deactivates_camera_preview():
++    backend = make_backend(lambda: 100.0)
++    backend.startup_timer.stop()
++    backend.setCameraPreviewActive(True)
++
++    backend.shutdown()
++
++    assert backend.bridge.camera_preview_requests == [True, False]
++    assert backend.cameraPreviewActive is False
++
++
+ def test_startup_defers_route_preview_until_timer():
+     calls = []
+     backend = UiBackend(
+diff --git a/src/ylhb_llm/ylhb_llm/inspection_display_ui_node.py b/src/ylhb_llm/ylhb_llm/inspection_display_ui_node.py
+index 77d5f4f..de558cc 100644
+--- a/src/ylhb_llm/ylhb_llm/inspection_display_ui_node.py
++++ b/src/ylhb_llm/ylhb_llm/inspection_display_ui_node.py
+@@ -68,6 +68,8 @@ def wait_for_display() -> bool:
+ def main(args: Optional[List[str]] = None) -> None:
+     try:
+         from PyQt5.QtQml import QQmlApplicationEngine
++
++        from .camera_image_provider import CameraImageProvider
+     except ImportError as exc:
+         print(
+             '无法加载 QtQml。请安装: sudo apt install python3-pyqt5.qtquick '
+@@ -98,7 +100,8 @@ def main(args: Optional[List[str]] = None) -> None:
+     signal_timer.start(100)
+     signals = UiSignals()
+     bridge = InspectionDisplayRosBridge(signals)
+-    backend = UiBackend(bridge, UiState())
++    camera_image_provider = CameraImageProvider()
++    backend = UiBackend(bridge, UiState(), camera_image_provider=camera_image_provider)
+     backend.shutdownRequested.connect(app.quit)
+     signals.systemStatus.connect(backend.update_system_status)
+     signals.localAppStatus.connect(backend.update_local_app_status)
+@@ -125,8 +128,10 @@ def main(args: Optional[List[str]] = None) -> None:
+     signals.dgModelStatus.connect(backend.update_dg_model_status)
+     signals.mapping3dStatus.connect(backend.update_mapping3d_status)
+     signals.mapping3dResult.connect(backend.update_mapping3d_result)
++    signals.cameraFrame.connect(backend.update_camera_frame)
+ 
+     engine = QQmlApplicationEngine()
++    engine.addImageProvider('camera', camera_image_provider)
+     engine.rootContext().setContextProperty('backend', backend)
+     errors = []
+     engine.warnings.connect(lambda warnings: errors.extend(str(item.toString()) for item in warnings))
+diff --git a/src/ylhb_llm/ylhb_llm/ui_backend.py b/src/ylhb_llm/ylhb_llm/ui_backend.py
+index 3d72e3d..a55a9f3 100644
+--- a/src/ylhb_llm/ylhb_llm/ui_backend.py
++++ b/src/ylhb_llm/ylhb_llm/ui_backend.py
+@@ -84,6 +84,12 @@ PATROL_TERMINAL_LABELS = {
+ 
+ DG_MODEL_KEYS = ('model1', 'model2', 'model3', 'navigation')
+ DG_MODEL_STATUS_FRESH_SEC = 3.0
++CAMERA_FRAME_FRESH_SEC = 2.0
++CAMERA_STREAM_TEXT = {
++    'ok': '画面正常',
++    'waiting': '等待画面…',
++    'camera_off': '相机未开启',
++}
+ 
+ 
+ class UiBackend(QObject):
+@@ -111,6 +117,9 @@ class UiBackend(QObject):
+     voiceStatusChanged = pyqtSignal()
+     shutdownRequested = pyqtSignal()
+     shutdownPendingChanged = pyqtSignal()
++    cameraFrameChanged = pyqtSignal()
++    cameraPreviewActiveChanged = pyqtSignal()
++    cameraStatusChanged = pyqtSignal()
+ 
+     def __init__(
+         self,
+@@ -119,6 +128,7 @@ class UiBackend(QObject):
+         clock: Callable[[], float] = time.monotonic,
+         route_preview_loader: Callable[..., Dict[str, Any]] = generate_route_preview,
+         patrol_task_builder: Callable[[Any], Dict[str, Dict[str, Any]]] = build_patrol_tasks,
++        camera_image_provider=None,
+     ) -> None:
+         super().__init__()
+         self.bridge = bridge
+@@ -126,6 +136,10 @@ class UiBackend(QObject):
+         self.clock = clock
+         self.route_preview_loader = route_preview_loader
+         self.patrol_task_builder = patrol_task_builder
++        self.camera_image_provider = camera_image_provider
++        self._camera_preview_active = False
++        self._camera_frame_counter = 0
++        self._camera_last_frame_at = 0.0
+         self._route_preview_thread: Optional[threading.Thread] = None
+         self._route_preview_mode = 'route_focus'
+         self._active_route_preview_path = ''
+@@ -167,7 +181,9 @@ class UiBackend(QObject):
+         self.freshness_timer = QTimer(self)
+         self.freshness_timer.timeout.connect(self.connectionFreshnessChanged.emit)
+         self.freshness_timer.timeout.connect(self.dgModelStatusChanged.emit)
++        self.freshness_timer.timeout.connect(self.cameraStatusChanged.emit)
+         self.freshness_timer.start(1000)
++        self.systemStatusChanged.connect(self.cameraStatusChanged.emit)
+         self.startup_timer = QTimer(self)
+         self.startup_timer.setSingleShot(True)
+         self.startup_timer.timeout.connect(self.finishStartup)
+@@ -453,6 +469,31 @@ class UiBackend(QObject):
+             result[key] = payload
+         return result
+ 
++    @pyqtProperty(int, notify=cameraFrameChanged)
++    def cameraFrameCounter(self) -> int:
++        return self._camera_frame_counter
++
++    @pyqtProperty(bool, notify=cameraPreviewActiveChanged)
++    def cameraPreviewActive(self) -> bool:
++        return self._camera_preview_active
++
++    @pyqtProperty(float, notify=cameraStatusChanged)
++    def cameraFrameAgeSec(self) -> float:
++        if not self._camera_last_frame_at:
++            return 1e9
++        return max(0.0, self.clock() - self._camera_last_frame_at)
++
++    @pyqtProperty(str, notify=cameraStatusChanged)
++    def cameraStreamState(self) -> str:
++        if self.cameraFrameAgeSec <= CAMERA_FRAME_FRESH_SEC:
++            return 'ok'
++        zed_state = str(self.state.system_status.get('zed') or 'stopped')
++        return 'camera_off' if zed_state == 'stopped' else 'waiting'
++
++    @pyqtProperty(str, notify=cameraStatusChanged)
++    def cameraStreamText(self) -> str:
++        return CAMERA_STREAM_TEXT[self.cameraStreamState]
++
+     @pyqtProperty('QVariantMap', notify=mapping3dStatusChanged)
+     def mapping3dStatus(self) -> Dict[str, Any]:
+         return self.state.mapping3d_status
+@@ -1102,6 +1143,51 @@ class UiBackend(QObject):
+         self.bridge.publish_system_command('stop_3d_mapping')
+         self.addLog('系统命令: stop_3d_mapping')
+ 
++    @pyqtSlot()
++    def startCamera(self) -> None:
++        if self._is_debounced('start_zed'):
++            self.addLog('忽略重复系统命令: start_zed')
++            return
++        self.bridge.publish_system_command('start_zed')
++        self.addLog('系统命令: start_zed')
++
++    @pyqtSlot()
++    def stopCamera(self) -> None:
++        if self._is_debounced('stop_zed'):
++            self.addLog('忽略重复系统命令: stop_zed')
++            return
++        self.bridge.publish_system_command('stop_zed')
++        self.addLog('系统命令: stop_zed')
++
++    @pyqtSlot(bool)
++    def setCameraPreviewActive(self, active: bool) -> None:
++        active = bool(active)
++        if active == self._camera_preview_active:
++            return
++        self._camera_preview_active = active
++        self.bridge.set_camera_preview_active(active)
++        if active:
++            self._camera_frame_counter = 0
++            self._camera_last_frame_at = 0.0
++            if self.camera_image_provider is not None:
++                self.camera_image_provider.clear()
++            self.cameraFrameChanged.emit()
++        self.cameraPreviewActiveChanged.emit()
++        self.cameraStatusChanged.emit()
++        self.addLog('相机画面订阅: 开启' if active else '相机画面订阅: 停止')
++
++    def update_camera_frame(self, image: Any) -> None:
++        if not self._camera_preview_active or image is None:
++            return
++        previous_state = self.cameraStreamState
++        if self.camera_image_provider is not None:
++            self.camera_image_provider.set_frame(image)
++        self._camera_frame_counter += 1
++        self._camera_last_frame_at = self.clock()
++        self.cameraFrameChanged.emit()
++        if self.cameraStreamState != previous_state:
++            self.cameraStatusChanged.emit()
++
+     @pyqtSlot(str)
+     def reconstructLatest3dMap(self, profile: str) -> None:
+         command = {
+@@ -1175,6 +1261,8 @@ class UiBackend(QObject):
+             'stop_navigation': 5.0,
+             'stop_bringup': 5.0,
+             'stop_patrol_mode': 5.0,
++            'start_zed': 0.8,
++            'stop_zed': 5.0,
+             'patrol:start': 0.8,
+             'patrol:pause': 0.8,
+             'patrol:resume': 0.8,
+@@ -1591,6 +1679,7 @@ class UiBackend(QObject):
+ 
+     def shutdown(self) -> None:
+         self.safety_timer.stop()
++        self.setCameraPreviewActive(False)
+         thread = self._route_preview_thread
+         if thread and thread.is_alive():
+             thread.join(timeout=1.0)
+diff --git a/src/ylhb_llm/ylhb_llm/ui_ros_bridge.py b/src/ylhb_llm/ylhb_llm/ui_ros_bridge.py
+index 9f97b56..7c4e464 100644
+--- a/src/ylhb_llm/ylhb_llm/ui_ros_bridge.py
++++ b/src/ylhb_llm/ylhb_llm/ui_ros_bridge.py
+@@ -8,14 +8,24 @@ from diagnostic_msgs.msg import DiagnosticArray
+ from geometry_msgs.msg import Twist
+ from PyQt5.QtCore import QObject, pyqtSignal
+ from rclpy.node import Node
+-from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
++from rclpy.qos import (
++    DurabilityPolicy,
++    HistoryPolicy,
++    QoSProfile,
++    ReliabilityPolicy,
++    qos_profile_sensor_data,
++)
++from sensor_msgs.msg import Image
+ from std_msgs.msg import Bool, String
+ from std_srvs.srv import SetBool, Trigger
+ from ylhb_mobile_bridge.patrol_qos import patrol_status_qos_profile
+ 
+ from ylhb_interfaces.msg import SayText, TaskEvent, TaskStatus, VoiceStatus
+ 
++from .camera_preview import PreviewRateLimiter, image_to_qimage
++
+ LOCAL_CONFIRM_PROTOCOL_VERSION = '1'
++CAMERA_PREVIEW_SYNC_PERIOD_SEC = 0.2
+ 
+ 
+ def latched_qos() -> QoSProfile:
+@@ -51,6 +61,7 @@ class UiSignals(QObject):
+     dgModelStatus = pyqtSignal(str, dict)
+     mapping3dStatus = pyqtSignal(dict)
+     mapping3dResult = pyqtSignal(dict)
++    cameraFrame = pyqtSignal(object)
+ 
+ 
+ class InspectionDisplayRosBridge(Node):
+@@ -91,6 +102,8 @@ class InspectionDisplayRosBridge(Node):
+             'dg_navigation_status_topic': '/dg/navigation/status',
+             'mapping3d_status_topic': '/inspection_ai/mapping3d_status',
+             'mapping3d_result_topic': '/inspection_ai/mapping3d_result',
++            'camera_preview_topic': '/zed/zed_node/rgb/color/rect/image',
++            'camera_preview_max_hz': 5.0,
+             'cmd_vel_topic': '/cmd_vel_manual',
+             'manual_authorization_topic': '/dg/control/manual_authorized',
+             'initial_system_mode': 'ready',
+@@ -166,6 +179,14 @@ class InspectionDisplayRosBridge(Node):
+             Trigger, self._param('confirm_platform_start_service_name')
+         )
+         self.local_app_enabled_client = self.create_client(SetBool, self._param('set_local_app_enabled_service_name'))
++        self._camera_preview_lock = threading.Lock()
++        self._camera_preview_desired = False
++        self._camera_preview_subscription = None
++        self._camera_preview_warned_encodings: set[str] = set()
++        self._camera_preview_limiter = PreviewRateLimiter(
++            float(self.get_parameter('camera_preview_max_hz').value)
++        )
++        self.create_timer(CAMERA_PREVIEW_SYNC_PERIOD_SEC, self._sync_camera_preview_subscription)
+         self.create_timer(1.0, self.publish_bridge_availability)
+         self.publish_system_mode(str(self.get_parameter('initial_system_mode').value))
+ 
+@@ -284,6 +305,44 @@ class InspectionDisplayRosBridge(Node):
+     def _voice_session_status(self, msg: String) -> None:
+         self.signals.voiceSessionStatus.emit(self.parse_json(msg.data))
+ 
++    def set_camera_preview_active(self, active: bool) -> None:
++        with self._camera_preview_lock:
++            self._camera_preview_desired = bool(active)
++
++    def camera_preview_desired(self) -> bool:
++        with self._camera_preview_lock:
++            return self._camera_preview_desired
++
++    def _sync_camera_preview_subscription(self) -> None:
++        desired = self.camera_preview_desired()
++        subscription = self._camera_preview_subscription
++        if desired and subscription is None:
++            self._camera_preview_limiter.reset()
++            self._camera_preview_subscription = self.create_subscription(
++                Image,
++                self._param('camera_preview_topic'),
++                self._camera_image,
++                qos_profile_sensor_data,
++            )
++        elif not desired and subscription is not None:
++            self._camera_preview_subscription = None
++            self.destroy_subscription(subscription)
++
++    def _camera_image(self, msg: Image) -> None:
++        if not self.camera_preview_desired() or not self._camera_preview_limiter.allow():
++            return
++        image = image_to_qimage(msg.width, msg.height, msg.step, msg.encoding, msg.data)
++        if image is None:
++            encoding = str(msg.encoding)
++            if encoding not in self._camera_preview_warned_encodings:
++                self._camera_preview_warned_encodings.add(encoding)
++                self.get_logger().warning(
++                    f'相机预览无法显示该图像: encoding={encoding} '
++                    f'size={msg.width}x{msg.height} step={msg.step}'
++                )
++            return
++        self.signals.cameraFrame.emit(image)
++
+     def publish_text_command(self, text: str, source: str = 'ui') -> None:
+         self._publish_json(self.text_pub, {
+             'schema_version': '1.0', 'source': source, 'text': text, 'timestamp': time.time(),
+diff --git a/src/ylhb_mobile_bridge/test/test_motor_direction_contract.py b/src/ylhb_mobile_bridge/test/test_motor_direction_contract.py
+index 853738e..1d66df8 100644
+--- a/src/ylhb_mobile_bridge/test/test_motor_direction_contract.py
++++ b/src/ylhb_mobile_bridge/test/test_motor_direction_contract.py
+@@ -21,6 +21,6 @@ def test_zlac_driver_owns_longitudinal_axis_calibration():
+         source_root / "ylhb_base" / "src" / "zlac8015d_canopen_controller.cpp"
+     ).read_text(encoding="utf-8")
+ 
+-    assert "linear_axis_direction: 1.0" in config
++    assert "linear_axis_direction: -1.0" in config
+     assert "command_to_internal(msg->linear.x, msg->angular.z)" in controller
+     assert "feedback_to_external(internal_vx, internal_wz)" in controller
